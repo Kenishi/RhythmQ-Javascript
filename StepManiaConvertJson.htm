@@ -1,0 +1,196 @@
+<html>
+	<head>
+		<title>Generate Stepmania JSON</title>
+		<style>
+			.hidden {
+				display:none;
+			}
+		</style>
+	</head>
+	<body>
+		Select root/top-level Stepmania Song directory: <input type="file" id="filepicker" name="fileList" webkitdirectory multiple/>
+
+		<div class="hidden" id="convert">
+			<button id="convertSaveBtn">Convert and Save</button>
+		</div>
+
+		<h3>Picked files:</h3>
+		<div class="hidden" id="pickedFiles"></div>
+
+	<script>
+			class Chart {
+				constructor(chart_type, difficulty, level, author, double, players=1) {
+					this.chart_type = chart_type;
+					this.difficulty = difficulty;
+					this.level = level;
+					this.author = author;
+					this.double = double;
+					this.players = players
+				}
+			}
+
+			class Song {
+				constructor(pack, title, subtitle, artist, credit, bpm, charts) {
+					this.pack = pack;
+					this.title = title;
+					this.subtitle = subtitle;
+					this.artist = artist;
+					this.credit = credit;
+					this.bpm = bpm;
+					this.charts = charts;
+				}
+			}
+
+			let songs = [];
+			function processSimFile(pack, data) {
+				let sim = data.split(/\r?\n/g);
+				let charts = [];
+				
+				let song = new Song()
+				song.pack = pack;
+				
+				// Read the Sim file data and parse out song information
+				for(var i=0; i < sim.length; i++) {
+					let line = sim[i];
+
+					if(line.includes("#ARTIST:")) {
+						song.artist = line.trimRight().split(":")[1].slice(0,-1);
+					}
+					if(line.includes("#TITLE:")) {
+						song.title = line.trimRight().split(":")[1].slice(0,-1);
+					}
+					if(line.includes("#CREDIT:")) {
+						song.credit = line.trimRight().split(":")[1].slice(0,-1);
+					}
+					if(line.includes("#SUBTITLE:")) {
+						song.subtitle = line.trimRight().split(":")[1].slice(0,-1);
+					}
+					if(line.includes("#BPMS:")) {
+						song.bpm = parseFloat(line.trimRight().split(":")[1].split("=")[1].slice(0,-1));
+					}
+
+					// Chart Parsing
+					if(line.includes("dance-single:")) {
+						let author = sim[++i].trimLeft().split(":")[0]; 
+						let difficulty = sim[++i].trimLeft().split(":")[0];
+						let level = parseInt(sim[++i].trimLeft().split(":")[0]);
+						let double = false;
+						charts.push(new Chart("dance-single", difficulty, level, author, double, 1));
+					}
+					if(line.includes("dance-double:")) {
+						let author = sim[++i].trimLeft().split(":")[0]; 
+						let difficulty = sim[++i].trimLeft().split(":")[0];
+						let level = parseInt(sim[++i].trimLeft().split(":")[0]);
+						let double = true;
+						charts.push(new Chart("dance-double", difficulty, level, author, double, 1));
+					}
+					song.charts = charts;
+				}
+
+				return song;
+			}
+
+			function getPackName(path) {
+				return path.split("/")[1];
+			}
+
+			let simFiles = {};
+			document.getElementById("filepicker").addEventListener("change", function(event)  {
+				let listing = document.getElementById("pickedFiles");
+				let files = event.target.files;
+
+				let tempFiles = [];
+				for(var i=0; i < files.length; i++) {
+					let file = files[i];
+					// Get file extension
+					if(file.name.lastIndexOf(".") >= 0) {
+						let ext = file.name.slice(file.name.lastIndexOf("."));
+						if(ext == ".sm" || ext == ".ssc") {
+							tempFiles.push(file);
+						}
+					}
+				}
+
+				tempFiles.forEach((file) => {
+					let relPath = file.webkitRelativePath;
+					let pack = getPackName(relPath);
+					if(simFiles.hasOwnProperty(pack)) {
+						simFiles[pack].push(file);
+					}
+					else {
+						simFiles[pack] = [];
+						simFiles[pack].push(file);
+					}
+				});
+
+				for(packName in simFiles) {
+					// Create Header for pack name
+					let header = document.createElement("h3");
+					header.innerHTML = packName;
+					listing.appendChild(header);
+
+					// Grab Path Names
+					simFiles[packName].forEach((file) => {
+						let item = document.createElement("li");
+						item.innerHTML = file.webkitRelativePath;
+						listing.appendChild(item);	
+					})
+				}
+
+				if(Object.keys(simFiles).length > 0) {
+					document.getElementById("convert").classList.remove("hidden");
+					document.getElementById("pickedFiles").classList.remove("hidden");
+				}
+			});
+
+
+			document.getElementById("convertSaveBtn").addEventListener("click", function() {
+				let readerPromises = [];
+				for(packName in simFiles) {
+					simFiles[packName].forEach((file) => {
+						let reader = new FileReader();
+						let promise = new Promise((resolve, reject) => {
+							reader.onload = function(e) {
+								let song = processSimFile(packName, e.target.result);
+								songs.push(song);
+								resolve();
+							}
+						});
+
+						reader.readAsText(file);
+						readerPromises.push(promise);
+					});	
+				}
+
+				Promise.all(readerPromises).then(() => {
+					let a = document.createElement("a");
+					let jsonOut = songs.map((song) => {
+						return {
+							pack: song.pack,
+							songName: song.title,
+							songArtist: song.artist,
+							bpm: song.bpm,
+							hasDifficulties: song.charts.length > 0,
+							hasDiffNumbers: true,
+							difficulties: song.charts.map((chart) => {
+								return {
+									diffName: chart.difficulty,
+									diffNumber: chart.level,
+									players: 1,
+									double: chart.double
+								};
+							})
+						}
+					});
+					let file = new Blob([JSON.stringify(jsonOut)], {type:"text/plain"});
+
+					a.href = URL.createObjectURL(file);
+					a.download = "sim_data.json";
+					a.click();
+
+					URL.revokeObjectURL(a.href);
+				});
+			});
+	</script>
+	</body>
+</html>
