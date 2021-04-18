@@ -146,7 +146,8 @@
 
 			document.getElementById("convertSaveBtn").addEventListener("click", function() {
 				let readerPromises = [];
-				for(packName in simFiles) {
+				for(var key in simFiles) {
+					let packName = key;
 					simFiles[packName].forEach((file) => {
 						let reader = new FileReader();
 						let promise = new Promise((resolve, reject) => {
