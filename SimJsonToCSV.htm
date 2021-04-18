@@ -1,0 +1,82 @@
+<html>
+	<head>
+		<title>Sim JSON to CSV</title>
+	</head>
+
+	<body>
+		<h3>JSON</h3>
+		<textarea type="textarea" id="json"></textarea>
+		<button id="convert">Convert</button>
+
+		<h3>CSV</h3>
+		<textarea type="textarea" id="csv"></textarea>
+
+		<script>
+			document.getElementById("convert").addEventListener("click", (event) => {
+				let inputData = document.getElementById("json").value;
+
+				try {
+						let data = JSON.parse(inputData);
+						let packGrouping = data.reduce((acc, value) => {
+							if(!acc[value.pack]) {
+								acc[value.pack] = [];
+							}
+
+							acc[value.pack].push(value);
+
+							return acc;
+						}, {});
+
+						var output = ["Title,Artist,BPM,DBeg,DEasy,DMed,DHard,DChal"];
+						for(var pack in packGrouping) {
+							output.push(",,,,,,,");
+							output.push(`${pack},,,,,,,`);
+							
+							let csv = packGrouping[pack].map((song) => {
+								let db = "~";
+								let	de = "~";
+								let dm = "~";
+								let dh = "~";
+								let dc = "~";
+								let hasDoubles = false;
+								song.difficulties.forEach((chart) => {
+									if(chart.double) {
+										hasDoubles = true;
+
+										switch(chart.diffName) {
+											case "Beginner":
+												db = chart.diffNumber;
+												break;
+											case "Easy":
+												de = chart.diffNumber;
+												break;
+											case "Medium":
+												dm = chart.diffNumber;
+												break;
+											case "Hard":
+												dh = chart.diffNumber;
+												break;
+											case "Challenge":
+												dc = chart.diffNumber;
+												break;
+											default:
+												break;
+										}
+									}
+								});
+
+								return [`${song.songName},${song.songArtist},${song.bpm},${db},${de},${dm},${dh},${dc}`];
+							});
+
+							output = output.concat(csv);
+						}
+
+						console.log(output.join("\n"));
+						document.getElementById("csv").value = output.join("\n");
+				} catch(error) {
+					console.log(error);
+				}
+			})
+		</script>
+	</body>
+</html>
